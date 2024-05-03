@@ -1,0 +1,59 @@
+name: Self-test
+on:
+  workflow_dispatch: {}
+  pull_request: {}
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    name: Calculate version
+    steps:
+      - id: version
+        uses: pulumi/provider-version-action@v1
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+  build:
+    uses: ./.github/workflows/build-binaries.yml
+    name: Build Go Binaries
+    needs: version
+    with:
+      binary-name: test-binary
+      packages: github.com/pulumi/publish-go-binary-action/testing/cmd/test-binary
+      version: ${{ needs.version.outputs.version }}
+      version-path: github.com/pulumi/publish-go-binary-action/testing/pkg/version.Version
+      runs-on: ubuntu-latest
+      root-dir: testing
+      extra-package-files: README.md
+
+  test-artifacts:
+    runs-on: ubuntu-latest
+    name: Test artifacts
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ needs.build.outputs.assets-prefix }}*
+
+      - name: Test artifacts
+        run: find . -maxdepth 1 -type f
+
+  # publish:
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - name: Publish Provider Binaries
+  #       uses: ./@v1
+  #       with:
+  #         binary-name: test-binary
+  #         version: ${{ needs.version.outputs.version }}
+  #         packages: github.com/pulumi/publish-go-binary-action/testing/cmd/test-binary
+  #         build-output: ${{ needs.build.outputs.build-output }}
+  #         version-path: github.com/pulumi/publish-go-binary-action/testing/cmd/test-binary/version.Version
+  #         github-token: ${{ secrets.GITHUB_TOKEN }}
